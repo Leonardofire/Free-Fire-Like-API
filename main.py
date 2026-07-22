@@ -7,7 +7,7 @@ from aiogram.types import Message
 # Вставь сюда токен от @BotFather
 TOKEN = "8938915066:AAFQZGTZla9H2E4L3wMo8QwpDFUhyLOnWa0"
 
-bot = Bot(token=TOKEN)
+bot = Bot(token=TOKEN, parse_mode="Markdown")
 dp = Dispatcher()
 
 @dp.message(Command("start"))
