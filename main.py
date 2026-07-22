@@ -1,54 +1,63 @@
-import logging
-import aiohttp
-from aiogram import Bot, Dispatcher, executor, types
+import telebot
+import requests
 
-TOKEN = "8938915066:AAF0ZGTIaOH2E4LM3wfb8qupDFUyLOniwa0"
+TOKEN = "8938915066:AAFQZGTZla9H2E4L3wMo8QwpDFUhyLOnWa0"
 
-bot = Bot(token=TOKEN, parse_mode="Markdown")
-dp = Dispatcher(bot)
+bot = telebot.TeleBot(TOKEN, parse_mode="Markdown")
 
-@dp.message_handler(commands=['start'])
-async def send_welcome(message: types.Message):
-    await message.reply(
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.reply_to(
+        message,
         "👋 **Привет!**\n\n"
-        "Отправь мне **UID игрока Free Fire**, и я попробую найти информацию о его профиле!"
+        "Отправь мне **UID игрока Free Fire**, и я загружу информацию о его профиле!"
     )
 
-@dp.message_handler(lambda message: message.text.isdigit())
-async def process_uid(message: types.Message):
+@bot.message_handler(func=lambda message: message.text and message.text.isdigit())
+def process_uid(message):
     uid = message.text.strip()
-    status_msg = await message.reply("🔄 *Запрашиваю данные с сервера Free Fire...*")
+    status_msg = bot.reply_to(message, "🔄 *Запрашиваю данные с сервера Free Fire...*")
     
-    # Публичный API для получения данных по UID
     url = f"https://freefireinfo-zy9l.onrender.com/api/v1/player-profile?uid={uid}"
     
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=10) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    basic = data.get("basicInfo", {})
-                    
-                    nickname = basic.get("nickname", "Неизвестно")
-                    level = basic.get("level", "Н/Д")
-                    likes = basic.get("liked", 0)
-                    region = basic.get("region", "Н/Д")
-                    
-                    text = (
-                        f"🎮 **Профиль игрока Free Fire**\n\n"
-                        f"👤 **Никнейм:** `{nickname}`\n"
-                        f"🆔 **UID:** `{uid}`\n"
-                        f"⭐ **Уровень:** `{level}`\n"
-                        f"👍 **Лайки:** `{likes}`\n"
-                        f"🌍 **Регион:** `{region}`"
-                    )
-                    await status_msg.edit_text(text)
-                else:
-                    await status_msg.edit_text("❌ **Игрок с таким UID не найден или сервер API недоступен.**")
-    except Exception as e:
-        await status_msg.edit_text("⚠️ **Не удалось подключиться к серверу игры.** Попробуйте позже.")
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            basic = data.get("basicInfo", {})
+            
+            nickname = basic.get("nickname", "Неизвестно")
+            level = basic.get("level", "Н/Д")
+            likes = basic.get("liked", 0)
+            region = basic.get("region", "Н/Д")
+            
+            text = (
+                f"🎮 **Профиль игрока Free Fire**\n\n"
+                f"👤 **Никнейм:** `{nickname}`\n"
+                f"🆔 **UID:** `{uid}`\n"
+                f"⭐ **Уровень:** `{level}`\n"
+                f"👍 **Лайки:** `{likes}`\n"
+                f"🌍 **Регион:** `{region}`"
+            )
+            bot.edit_message_text(
+                text, 
+                chat_id=status_msg.chat.id, 
+                message_id=status_msg.message_id,
+                parse_mode="Markdown"
+            )
+        else:
+            bot.edit_message_text(
+                "❌ **Игрок с таким UID не найден или сервер API недоступен.**", 
+                chat_id=status_msg.chat.id, 
+                message_id=status_msg.message_id
+            )
+    except Exception:
+        bot.edit_message_text(
+            "⚠️ **Не удалось подключиться к серверу игры.** Попробуйте позже.", 
+            chat_id=status_msg.chat.id, 
+            message_id=status_msg.message_id
+        )
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    executor.start_polling(dp, skip_updates=True)
+    bot.infinity_polling()
     
