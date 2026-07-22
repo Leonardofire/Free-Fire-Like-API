@@ -1,43 +1,38 @@
-import asyncio
 import logging
 import aiohttp
-from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram import Bot, Dispatcher, executor, types
 
-# Ваш токен бота
 TOKEN = "8938915066:AAF0ZGTIaOH2E4LM3wfb8qupDFUyLOniwa0"
 
 bot = Bot(token=TOKEN, parse_mode="Markdown")
-dp = Dispatcher()
+dp = Dispatcher(bot)
 
-@dp.message(Command("start"))
-async def start_handler(message: Message):
-    await message.answer(
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: types.Message):
+    await message.reply(
         "👋 **Привет!**\n\n"
-        "Отправь мне **UID игрока Free Fire**, и я загружу реальную информацию о профиле!"
+        "Отправь мне **UID игрока Free Fire**, и я попробую найти информацию о его профиле!"
     )
 
-@dp.message(F.text.isdigit())
-async def process_uid(message: Message):
+@dp.message_handler(lambda message: message.text.isdigit())
+async def process_uid(message: types.Message):
     uid = message.text.strip()
-    await message.answer("🔄 *Получаю данные с сервера Free Fire...*")
+    status_msg = await message.reply("🔄 *Запрашиваю данные с сервера Free Fire...*")
     
-    # Публичный API для получения информации по UID Free Fire
-    api_url = f"https://freefireinfo-zy9l.onrender.com/api/v1/player-profile?uid={uid}"
+    # Публичный API для получения данных по UID
+    url = f"https://freefireinfo-zy9l.onrender.com/api/v1/player-profile?uid={uid}"
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_url, timeout=10) as response:
-                if response.status == 200:
-                    data = await response.json()
+            async with session.get(url, timeout=10) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    basic = data.get("basicInfo", {})
                     
-                    # Разбираем полученные данные
-                    basic_info = data.get("basicInfo", {})
-                    nickname = basic_info.get("nickname", "Неизвестно")
-                    level = basic_info.get("level", "Н/Д")
-                    region = basic_info.get("region", "Н/Д")
-                    likes = basic_info.get("liked", 0)
+                    nickname = basic.get("nickname", "Неизвестно")
+                    level = basic.get("level", "Н/Д")
+                    likes = basic.get("liked", 0)
+                    region = basic.get("region", "Н/Д")
                     
                     text = (
                         f"🎮 **Профиль игрока Free Fire**\n\n"
@@ -47,16 +42,13 @@ async def process_uid(message: Message):
                         f"👍 **Лайки:** `{likes}`\n"
                         f"🌍 **Регион:** `{region}`"
                     )
-                    await message.answer(text)
+                    await status_msg.edit_text(text)
                 else:
-                    await message.answer("❌ **Игрок с таким UID не найден или сервер недоступен.**")
+                    await status_msg.edit_text("❌ **Игрок с таким UID не найден или сервер API недоступен.**")
     except Exception as e:
-        await message.answer("⚠️ **Ошибка при получении данных.** Попробуйте позже.")
+        await status_msg.edit_text("⚠️ **Не удалось подключиться к серверу игры.** Попробуйте позже.")
 
-async def main():
+if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    executor.start_polling(dp, skip_updates=True)
     
